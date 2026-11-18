@@ -1,18 +1,24 @@
-# Wave — Personal Offline Music Player
+# Wave — Personal Music Library
 
-เครื่องเล่นเพลงส่วนตัวสำหรับใช้งานคนเดียว ไม่มีบัญชีผู้ใช้ ไม่มี API และไม่มี Backend
+Wave is a browser-based music player with a private local library and an optional Navidrome connection.
 
-## วิธีใช้
-- เปิดหน้าเว็บ Wave แล้วกด **เพิ่มเพลง** เพื่อเลือกไฟล์เสียงจากอุปกรณ์
-- เลือกเพลงในคลังเพื่อเล่น กดหัวใจเพื่อเพิ่มในรายการที่ชอบ
-- ใช้ช่องค้นหาเพื่อค้นหาชื่อเพลงหรือศิลปิน
-- ใช้ **สำรองข้อมูล** เพื่อส่งออกไฟล์เพลงและข้อมูลเป็น JSON และ **กู้คืนข้อมูล** เพื่อเรียกคืนจากไฟล์สำรอง
+## Local library
+- Add audio files from your device and play them in Wave.
+- Tracks and audio files are stored in this browser's IndexedDB database.
+- Favorites, search, backup, and restore apply to the local library.
+- Local music is not uploaded to Wave or synchronized between devices.
 
-## การจัดเก็บและความเป็นส่วนตัว
-- ไฟล์เพลงจัดเก็บใน IndexedDB ของเบราว์เซอร์บนอุปกรณ์นี้
-- เว็บไซต์นี้ไม่มีการอัปโหลดไฟล์เพลงไปยังเซิร์ฟเวอร์ และไม่เรียก API ภายนอก
-- การเผยแพร่ผ่าน Render เป็นเพียงการให้บริการไฟล์หน้าเว็บแบบ Static เท่านั้น
-- ข้อมูลเพลงไม่ซิงก์ข้ามอุปกรณ์หรือเบราว์เซอร์ ควรสำรองข้อมูลก่อนล้างข้อมูลเว็บไซต์
+## Navidrome
+- Connect to a Navidrome server using its Subsonic-compatible API.
+- Search the server's music collection, view track metadata and cover art, and stream tracks through the Wave player.
+- Wave does not provide a hosted music catalog or a Navidrome server. You must have access to a running Navidrome instance that contains your music.
+- The Navidrome server must be reachable from the browser over HTTPS (localhost is allowed for local development) and must permit cross-origin requests from the Wave site when hosted on a different origin.
+- Wave stores the server URL and username in this browser. The password is not saved; it remains in memory for the current page session and is used to create Subsonic token-authenticated requests.
 
-## หมายเหตุ
-การเล่นไฟล์เสียงขึ้นอยู่กับรูปแบบที่เบราว์เซอร์และอุปกรณ์รองรับ
+## Hosting and privacy
+- The Wave website is deployed as a static site. It does not upload or store your music on Render.
+- Navidrome data and music files remain on the Navidrome server you configure.
+- Browser storage is specific to the device and browser. Back up your local library before clearing site data.
+
+## Playback
+Background playback and operating-system media controls depend on browser and device support.
