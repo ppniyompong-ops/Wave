@@ -204,7 +204,8 @@
       });
       if (id !== requestCounter) return;
 
-      const songs = (result.searchResult3 && result.searchResult3.song) || [];
+      const rawSongs = (result.searchResult3 && result.searchResult3.song) || [];
+      const songs = Array.isArray(rawSongs) ? rawSongs : (rawSongs ? [rawSongs] : []);
       remoteTracks = songs.map(song => ({
         id: song.id,
         name: song.title || 'Untitled track',
