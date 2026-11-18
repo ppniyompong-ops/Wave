@@ -62,12 +62,54 @@
     });
   }
 
+  function updateMediaSession() {
+    if (!('mediaSession' in navigator)) return;
+    const track = tracks[current];
+    if (!track) {
+      navigator.mediaSession.metadata = null;
+      return;
+    }
+    if ('MediaMetadata' in window) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.name,
+        artist: track.artist || 'Unknown artist',
+        album: 'Wave Music Library'
+      });
+    }
+    navigator.mediaSession.playbackState = audio.paused ? 'paused' : 'playing';
+    if (Number.isFinite(audio.duration) && audio.duration > 0 && 'setPositionState' in navigator.mediaSession) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: audio.duration,
+          playbackRate: audio.playbackRate,
+          position: Math.min(audio.currentTime, audio.duration)
+        });
+      } catch (_) {}
+    }
+  }
+
   function updatePlayer() {
     const track = tracks[current];
     $('song').textContent = track ? track.name : 'No track selected';
     $('artist').textContent = track ? (track.artist || 'Unknown artist') : 'Choose a track to start listening';
     $('play').innerHTML = icon(audio.paused ? 'play' : 'pause', 17);
     $('play').setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
+    updateMediaSession();
+  }
+
+  if ('mediaSession' in navigator) {
+    const mediaActions = {
+      play: () => audio.play().catch(() => {}),
+      pause: () => audio.pause(),
+      previoustrack: () => { if (tracks.length) selectTrack((current - 1 + tracks.length) % tracks.length); },
+      nexttrack: () => { if (tracks.length) selectTrack((current + 1) % tracks.length); },
+      seekbackward: details => { audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset || 10)); },
+      seekforward: details => { audio.currentTime = Math.min(audio.duration || Infinity, audio.currentTime + (details.seekOffset || 10)); },
+      seekto: details => { if (Number.isFinite(details.seekTime)) audio.currentTime = details.seekTime; }
+    };
+    Object.entries(mediaActions).forEach(([action, handler]) => {
+      try { navigator.mediaSession.setActionHandler(action, handler); } catch (_) {}
+    });
   }
 
   function render() {
