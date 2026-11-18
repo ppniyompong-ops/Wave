@@ -277,7 +277,9 @@
     $('elapsed').textContent = formatTime(audio.currentTime);
     $('duration').textContent = formatTime(audio.duration);
     $('seek').value = audio.duration ? audio.currentTime / audio.duration * 1000 : 0;
+    updateMediaSession();
   };
+  audio.onloadedmetadata = updateMediaSession;
   $('seek').oninput = event => {
     if (audio.duration) audio.currentTime = Number(event.target.value) / 1000 * audio.duration;
   };
