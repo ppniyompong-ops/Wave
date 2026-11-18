@@ -1,28 +1,338 @@
-(()=>{'use strict';
-const $=id=>document.getElementById(id),audio=$('audio');
-let db,tracks=[],current=-1,view='all',busy=false;
-const paths={play:'<path d="m8 5 11 7-11 7z"/>',pause:'<path d="M8 5h3v14H8zM15 5h3v14h-3z"/>',prev:'<path d="M6 5v14M19 6l-9 6 9 6z"/>',next:'<path d="M18 5v14M5 6l9 6-9 6z"/>',heart:'<path d="M20.8 8.7c0 5.1-8.8 10-8.8 10S3.2 13.8 3.2 8.7A4.2 4.2 0 0 1 11 6.4l1 1 1-1a4.2 4.2 0 0 1 7.8 2.3Z"/>',trash:'<path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3"/>',library:'<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H20v15H5.5A1.5 1.5 0 0 1 4 17.5zM4 7h16M8 4v15"/>'};
-const icon=(n,s=18)=>'<svg aria-hidden="true" width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(paths[n]||'')+'</svg>';
-const fmt=n=>Number.isFinite(n)?Math.floor(n/60)+':'+String(Math.floor(n%60)).padStart(2,'0'):'0:00';
-const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function notice(s){const n=$('notice');n.textContent=s;n.classList.add('show');clearTimeout(notice.timer);notice.timer=setTimeout(()=>n.classList.remove('show'),2600)}
-function openDB(){return new Promise((ok,no)=>{const r=indexedDB.open('wave-personal',1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('tracks'))r.result.createObjectStore('tracks',{keyPath:'id',autoIncrement:true})};r.onsuccess=()=>{db=r.result;ok()};r.onerror=()=>no(r.error)})}
-function save(t){return new Promise((ok,no)=>{const r=db.transaction('tracks','readwrite').objectStore('tracks').put(t);r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}
-function getAll(){return new Promise((ok,no)=>{const r=db.transaction('tracks').objectStore('tracks').getAll();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}
-function render(){const q=$('search').value.trim().toLowerCase(),list=tracks.map((t,i)=>({...t,i})).filter(t=>(view!=='fav'||t.favorite)&&((t.name+' '+(t.artist||'')).toLowerCase().includes(q)));$('heading').textContent=view==='fav'?'เพลงที่ชอบ':'คลังเพลง';$('libraryTab').classList.toggle('active',view==='all');$('favTab').classList.toggle('active',view==='fav');$('tracks').innerHTML=list.length?list.map(t=>'<article class="track '+(t.i===current?'current':'')+'"><span class="track-index">'+String(t.i+1).padStart(2,'0')+'</span><div class="meta"><strong>'+esc(t.name)+'</strong><small>'+esc(t.artist||'ไม่ทราบศิลปิน')+'</small></div><button class="icon-btn" data-play="'+t.i+'" aria-label="เล่น">'+icon(t.i===current&&!audio.paused?'pause':'play')+'</button><button class="icon-btn favorite '+(t.favorite?'selected':'')+'" data-fav="'+t.id+'" aria-label="เพลงที่ชอบ">'+icon('heart')+'</button><button class="icon-btn remove" data-remove="'+t.id+'" aria-label="ลบเพลง">'+icon('trash')+'</button></article>').join(''):'<div class="empty"><span>'+icon('library',30)+'</span><strong>'+(view==='fav'?'ยังไม่มีเพลงที่ชอบ':'คลังเพลงยังว่าง')+'</strong><small>เลือกไฟล์เสียงจากอุปกรณ์เพื่อเริ่มต้น</small></div>';updatePlayer()}
-function updatePlayer(){const t=tracks[current];$('song').textContent=t?t.name:'ยังไม่ได้เลือกเพลง';$('artist').textContent=t?(t.artist||'ไม่ทราบศิลปิน'):'เพิ่มเพลงจากอุปกรณ์เพื่อเริ่มฟัง';$('play').innerHTML=icon(audio.paused?'play':'pause',20)}
-function select(i){if(i<0||i>=tracks.length)return;current=i;audio.src=tracks[i].url;audio.load();render();audio.play().catch(()=>notice('ไฟล์นี้เล่นไม่ได้ในเบราว์เซอร์'))}
-async function addFiles(files){let count=0;for(const f of files){if(!f.type.startsWith('audio/'))continue;const t={name:f.name.replace(/\.[^.]+$/,''),artist:'',type:f.type,blob:f,favorite:false};const r=db.transaction('tracks','readwrite').objectStore('tracks').add(t);const id=await new Promise((ok,no)=>{r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});tracks.push({...t,id,url:URL.createObjectURL(f)});count++}render();notice(count?'เพิ่มเพลง '+count+' รายการแล้ว':'ไม่พบไฟล์เสียงที่รองรับ')}
-$('tracks').addEventListener('click',async e=>{const p=e.target.closest('[data-play]'),f=e.target.closest('[data-fav]'),d=e.target.closest('[data-remove]');if(p)select(Number(p.dataset.play));if(f){const t=tracks.find(x=>x.id===Number(f.dataset.fav));if(t){t.favorite=!t.favorite;await save({id:t.id,name:t.name,artist:t.artist,type:t.type,blob:t.blob,favorite:t.favorite});render()}}if(d){const id=Number(d.dataset.remove),i=tracks.findIndex(x=>x.id===id);if(i>=0&&confirm('ลบเพลงนี้ออกจากคลัง?')){await new Promise((ok,no)=>{const r=db.transaction('tracks','readwrite').objectStore('tracks').delete(id);r.onsuccess=ok;r.onerror=()=>no(r.error)});URL.revokeObjectURL(tracks[i].url);tracks.splice(i,1);if(i===current){audio.pause();audio.removeAttribute('src');current=-1}else if(i<current)current--;render();notice('ลบเพลงแล้ว')}}});
-$('add').onclick=()=>$('files').click();$('files').onchange=async e=>{try{await addFiles([...e.target.files])}catch(x){notice('เพิ่มเพลงไม่สำเร็จ')}e.target.value=''};
-$('libraryTab').onclick=()=>{view='all';render()};$('favTab').onclick=()=>{view='fav';render()};$('search').oninput=render;
-$('play').onclick=()=>{if(current<0){if(tracks.length)select(0);else notice('กรุณาเพิ่มเพลงก่อน')}else if(audio.paused)audio.play().catch(()=>notice('เล่นเพลงไม่สำเร็จ'));else audio.pause()};
-$('prev').onclick=()=>tracks.length&&select((current-1+tracks.length)%tracks.length);$('next').onclick=()=>tracks.length&&select((current+1)%tracks.length);
-audio.onplay=()=>{updatePlayer();render()};audio.onpause=()=>{updatePlayer();render()};audio.onended=()=>tracks.length&&select((current+1)%tracks.length);
-audio.ontimeupdate=()=>{$('elapsed').textContent=fmt(audio.currentTime);$('duration').textContent=fmt(audio.duration);$('seek').value=audio.duration?audio.currentTime/audio.duration*1000:0};
-$('seek').oninput=e=>{if(audio.duration)audio.currentTime=Number(e.target.value)/1000*audio.duration};$('volume').oninput=e=>audio.volume=Number(e.target.value);audio.volume=.8;
-const b64=blob=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=()=>no(r.error);r.readAsDataURL(blob)});
-$('backup').onclick=async()=>{if(busy)return;busy=true;try{const data={app:'Wave',version:1,tracks:await Promise.all(tracks.map(async t=>({name:t.name,artist:t.artist||'',type:t.type||'audio/mpeg',favorite:!!t.favorite,audio:await b64(t.blob)})))};const url=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='wave-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1200);notice('สร้างไฟล์สำรองแล้ว')}catch(e){notice('สำรองข้อมูลไม่สำเร็จ')}finally{busy=false}};
-$('restore').onclick=()=>$('backupFile').click();$('backupFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const data=JSON.parse(await f.text());if(data.app!=='Wave'||!Array.isArray(data.tracks))throw Error('invalid');if(!confirm('กู้คืนจะแทนที่เพลงทั้งหมดในคลัง ดำเนินการหรือไม่?'))return;audio.pause();audio.removeAttribute('src');tracks.forEach(t=>URL.revokeObjectURL(t.url));await new Promise((ok,no)=>{const r=db.transaction('tracks','readwrite').objectStore('tracks').clear();r.onsuccess=ok;r.onerror=()=>no(r.error)});tracks=[];current=-1;for(const x of data.tracks){const raw=atob(x.audio),bytes=Uint8Array.from(raw,c=>c.charCodeAt(0)),blob=new Blob([bytes],{type:x.type||'audio/mpeg'}),t={name:x.name||'Untitled',artist:x.artist||'',type:blob.type,blob,favorite:!!x.favorite};const r=db.transaction('tracks','readwrite').objectStore('tracks').add(t),id=await new Promise((ok,no)=>{r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});tracks.push({...t,id,url:URL.createObjectURL(blob)})}render();notice('กู้คืนข้อมูลแล้ว')}catch(x){notice('กู้คืนไม่สำเร็จ: ไฟล์ไม่ถูกต้อง')}finally{e.target.value=''}};
-(async()=>{try{await openDB();tracks=(await getAll()).map(t=>({...t,url:URL.createObjectURL(t.blob)}));render()}catch(e){notice('เปิดคลังเพลงไม่สำเร็จ')}})();
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const audio = $('audio');
+  let db;
+  let tracks = [];
+  let current = -1;
+  let view = 'all';
+  let busy = false;
+
+  const paths = {
+    play: '<path d="m8 5 11 7-11 7z"/>',
+    pause: '<path d="M8 5h3v14H8zM15 5h3v14h-3z"/>',
+    prev: '<path d="M6 5v14M19 6l-9 6 9 6z"/>',
+    next: '<path d="M18 5v14M5 6l9 6-9 6z"/>',
+    heart: '<path d="M20.8 8.7c0 5.1-8.8 10-8.8 10S3.2 13.8 3.2 8.7A4.2 4.2 0 0 1 11 6.4l1 1 1-1a4.2 4.2 0 0 1 7.8 2.3Z"/>',
+    trash: '<path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3"/>',
+    library: '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H20v15H5.5A1.5 1.5 0 0 1 4 17.5zM4 7h16M8 4v15"/>',
+    music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>'
+  };
+
+  const icon = (name, size) => '<svg aria-hidden="true" width="' + (size || 18) + '" height="' + (size || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || '') + '</svg>';
+  const formatTime = value => Number.isFinite(value) ? Math.floor(value / 60) + ':' + String(Math.floor(value % 60)).padStart(2, '0') : '0:00';
+  const escapeHTML = value => String(value || '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+
+  function notify(message) {
+    const notice = $('notice');
+    notice.textContent = message;
+    notice.classList.add('show');
+    clearTimeout(notify.timer);
+    notify.timer = setTimeout(() => notice.classList.remove('show'), 2600);
+  }
+
+  function openDatabase() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('wave-personal', 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains('tracks')) {
+          request.result.createObjectStore('tracks', { keyPath: 'id', autoIncrement: true });
+        }
+      };
+      request.onsuccess = () => { db = request.result; resolve(); };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  function saveTrack(track) {
+    return new Promise((resolve, reject) => {
+      const request = db.transaction('tracks', 'readwrite').objectStore('tracks').put(track);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  function getAllTracks() {
+    return new Promise((resolve, reject) => {
+      const request = db.transaction('tracks').objectStore('tracks').getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  function updatePlayer() {
+    const track = tracks[current];
+    $('song').textContent = track ? track.name : 'No track selected';
+    $('artist').textContent = track ? (track.artist || 'Unknown artist') : 'Choose a track to start listening';
+    $('play').innerHTML = icon(audio.paused ? 'play' : 'pause', 17);
+    $('play').setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
+  }
+
+  function render() {
+    const query = $('search').value.trim().toLowerCase();
+    const list = tracks
+      .map((track, index) => ({ ...track, index }))
+      .filter(track => (view !== 'fav' || track.favorite) &&
+        (track.name + ' ' + (track.artist || '')).toLowerCase().includes(query));
+
+    $('heading').textContent = view === 'fav' ? 'Favorites' : 'Your Library';
+    $('libraryTab').classList.toggle('active', view === 'all');
+    $('favTab').classList.toggle('active', view === 'fav');
+    $('libraryTab').setAttribute('aria-pressed', String(view === 'all'));
+    $('favTab').setAttribute('aria-pressed', String(view === 'fav'));
+
+    if (list.length) {
+      $('tracks').innerHTML = list.map(track =>
+        '<article class="track ' + (track.index === current ? 'current' : '') + '">' +
+          '<span class="track-index">' + String(track.index + 1).padStart(2, '0') + '</span>' +
+          '<div class="meta"><strong>' + escapeHTML(track.name) + '</strong><small>' + escapeHTML(track.artist || 'Unknown artist') + '</small></div>' +
+          '<button class="icon-btn" type="button" data-play="' + track.index + '" aria-label="Play ' + escapeHTML(track.name) + '">' + icon(track.index === current && !audio.paused ? 'pause' : 'play') + '</button>' +
+          '<button class="icon-btn favorite ' + (track.favorite ? 'selected' : '') + '" type="button" data-fav="' + track.id + '" aria-label="' + (track.favorite ? 'Remove from favorites' : 'Add to favorites') + '">' + icon('heart') + '</button>' +
+          '<button class="icon-btn remove" type="button" data-remove="' + track.id + '" aria-label="Remove ' + escapeHTML(track.name) + '">' + icon('trash') + '</button>' +
+        '</article>'
+      ).join('');
+    } else {
+      let title = 'Your library is empty';
+      let description = 'Add audio files from this device to get started.';
+      if (query) {
+        title = 'No matches found';
+        description = 'Try a different track title or artist.';
+      } else if (view === 'fav') {
+        title = 'No favorites yet';
+        description = 'Use the heart icon on a track to save it here.';
+      }
+      $('tracks').innerHTML =
+        '<div class="empty">' +
+          '<span class="empty-icon">' + icon(view === 'fav' ? 'heart' : 'music', 24) + '</span>' +
+          '<strong>' + title + '</strong>' +
+          '<small>' + description + '</small>' +
+          (!query && view === 'all' ? '<button class="empty-action" type="button" data-add-empty>' + icon('plus', 15) + 'Add music</button>' : '') +
+        '</div>';
+    }
+
+    updatePlayer();
+  }
+
+  function selectTrack(index) {
+    if (index < 0 || index >= tracks.length) return;
+    current = index;
+    audio.src = tracks[index].url;
+    audio.load();
+    render();
+    audio.play().catch(() => notify('This audio file could not be played in your browser.'));
+  }
+
+  async function addFiles(files) {
+    let count = 0;
+    for (const file of files) {
+      if (!file.type || !file.type.startsWith('audio/')) continue;
+      const track = {
+        name: file.name.replace(/\.[^.]+$/, ''),
+        artist: '',
+        type: file.type,
+        blob: file,
+        favorite: false
+      };
+      const request = db.transaction('tracks', 'readwrite').objectStore('tracks').add(track);
+      const id = await new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      tracks.push({ ...track, id, url: URL.createObjectURL(file) });
+      count++;
+    }
+    render();
+    notify(count ? 'Added ' + count + (count === 1 ? ' track.' : ' tracks.') : 'No supported audio files were selected.');
+  }
+
+  $('tracks').addEventListener('click', async event => {
+    const playButton = event.target.closest('[data-play]');
+    const favoriteButton = event.target.closest('[data-fav]');
+    const removeButton = event.target.closest('[data-remove]');
+    const emptyAddButton = event.target.closest('[data-add-empty]');
+
+    if (emptyAddButton) $('files').click();
+    if (playButton) selectTrack(Number(playButton.dataset.play));
+
+    if (favoriteButton) {
+      const track = tracks.find(item => item.id === Number(favoriteButton.dataset.fav));
+      if (track) {
+        track.favorite = !track.favorite;
+        await saveTrack({
+          id: track.id,
+          name: track.name,
+          artist: track.artist,
+          type: track.type,
+          blob: track.blob,
+          favorite: track.favorite
+        });
+        render();
+      }
+    }
+
+    if (removeButton) {
+      const id = Number(removeButton.dataset.remove);
+      const index = tracks.findIndex(item => item.id === id);
+      if (index >= 0 && window.confirm('Remove this track from your library?')) {
+        await new Promise((resolve, reject) => {
+          const request = db.transaction('tracks', 'readwrite').objectStore('tracks').delete(id);
+          request.onsuccess = resolve;
+          request.onerror = () => reject(request.error);
+        });
+        URL.revokeObjectURL(tracks[index].url);
+        tracks.splice(index, 1);
+        if (index === current) {
+          audio.pause();
+          audio.removeAttribute('src');
+          current = -1;
+        } else if (index < current) {
+          current--;
+        }
+        render();
+        notify('Track removed.');
+      }
+    }
+  });
+
+  $('add').onclick = () => $('files').click();
+  $('files').onchange = async event => {
+    try {
+      await addFiles(Array.from(event.target.files));
+    } catch (error) {
+      notify('Could not add the selected music.');
+    }
+    event.target.value = '';
+  };
+
+  $('libraryTab').onclick = () => { view = 'all'; render(); };
+  $('favTab').onclick = () => { view = 'fav'; render(); };
+  $('search').oninput = render;
+
+  $('play').onclick = () => {
+    if (current < 0) {
+      if (tracks.length) selectTrack(0);
+      else notify('Add music to your library first.');
+    } else if (audio.paused) {
+      audio.play().catch(() => notify('Playback could not be started.'));
+    } else {
+      audio.pause();
+    }
+  };
+
+  $('prev').onclick = () => {
+    if (tracks.length) selectTrack((current - 1 + tracks.length) % tracks.length);
+  };
+  $('next').onclick = () => {
+    if (tracks.length) selectTrack((current + 1) % tracks.length);
+  };
+
+  audio.onplay = () => { updatePlayer(); render(); };
+  audio.onpause = () => { updatePlayer(); render(); };
+  audio.onended = () => { if (tracks.length) selectTrack((current + 1) % tracks.length); };
+  audio.ontimeupdate = () => {
+    $('elapsed').textContent = formatTime(audio.currentTime);
+    $('duration').textContent = formatTime(audio.duration);
+    $('seek').value = audio.duration ? audio.currentTime / audio.duration * 1000 : 0;
+  };
+  $('seek').oninput = event => {
+    if (audio.duration) audio.currentTime = Number(event.target.value) / 1000 * audio.duration;
+  };
+  $('volume').oninput = event => { audio.volume = Number(event.target.value); };
+  audio.volume = 0.8;
+
+  const blobToBase64 = blob => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1]);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+
+  $('backup').onclick = async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      const data = {
+        app: 'Wave',
+        version: 1,
+        tracks: await Promise.all(tracks.map(async track => ({
+          name: track.name,
+          artist: track.artist || '',
+          type: track.type || 'audio/mpeg',
+          favorite: !!track.favorite,
+          audio: await blobToBase64(track.blob)
+        })))
+      };
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'wave-backup.json';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1200);
+      notify('Library backup created.');
+    } catch (error) {
+      notify('Could not create a library backup.');
+    } finally {
+      busy = false;
+    }
+  };
+
+  $('restore').onclick = () => $('backupFile').click();
+  $('backupFile').onchange = async event => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (data.app !== 'Wave' || !Array.isArray(data.tracks)) throw new Error('Invalid backup');
+      if (!window.confirm('Restoring this backup will replace all tracks in your library. Continue?')) return;
+
+      audio.pause();
+      audio.removeAttribute('src');
+      tracks.forEach(track => URL.revokeObjectURL(track.url));
+      await new Promise((resolve, reject) => {
+        const request = db.transaction('tracks', 'readwrite').objectStore('tracks').clear();
+        request.onsuccess = resolve;
+        request.onerror = () => reject(request.error);
+      });
+
+      tracks = [];
+      current = -1;
+      for (const item of data.tracks) {
+        const raw = atob(item.audio);
+        const bytes = Uint8Array.from(raw, char => char.charCodeAt(0));
+        const blob = new Blob([bytes], { type: item.type || 'audio/mpeg' });
+        const track = {
+          name: item.name || 'Untitled track',
+          artist: item.artist || '',
+          type: blob.type,
+          blob,
+          favorite: !!item.favorite
+        };
+        const request = db.transaction('tracks', 'readwrite').objectStore('tracks').add(track);
+        const id = await new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        tracks.push({ ...track, id, url: URL.createObjectURL(blob) });
+      }
+
+      render();
+      notify('Library restored successfully.');
+    } catch (error) {
+      notify('Could not restore this backup. Check that the file is valid.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  (async () => {
+    try {
+      await openDatabase();
+      tracks = (await getAllTracks()).map(track => ({ ...track, url: URL.createObjectURL(track.blob) }));
+      render();
+    } catch (error) {
+      notify('Could not open your music library in this browser.');
+    }
+  })();
 })();
