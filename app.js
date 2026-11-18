@@ -330,6 +330,15 @@
       audio.play().catch(() => notify('Playback could not be started. Check the server connection.'));
     },
     isRemoteTrack() { return !!externalTrack; },
+    clearRemote() {
+      if (!externalTrack) return;
+      externalTrack = null;
+      current = -1;
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+      render();
+    },
     getAudio() { return audio; }
   };
 
