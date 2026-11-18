@@ -12,7 +12,7 @@ Wave is a browser-based music player with a private local library and an optiona
 - Connect to a Navidrome server using its Subsonic-compatible API.
 - Search the server's music collection, view track metadata and cover art, and stream tracks through the Wave player.
 - Wave does not provide a hosted music catalog or a Navidrome server. You must have access to a running Navidrome instance that contains your music.
-- The Navidrome server must be reachable from the browser over HTTPS (localhost is allowed for local development) and must permit cross-origin requests from the Wave site when hosted on a different origin.
+- The Navidrome server must be reachable from the browser over HTTPS (localhost is allowed for local development). Navidrome enables CORS for its API; a reverse proxy in front of it must preserve the CORS response headers.
 - Wave stores the server URL and username in this browser. The password is not saved; it remains in memory for the current page session and is used to create Subsonic token-authenticated requests.
 
 ## Hosting and privacy
