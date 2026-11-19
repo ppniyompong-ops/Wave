@@ -7,8 +7,6 @@
   let tracks = [];
   let current = -1;
   let view = 'all';
-  let page = 'library';
-  let externalTrack = null;
   let busy = false;
 
   const paths = {
@@ -64,7 +62,7 @@
     });
   }
 
-  function getCurrentTrack() { return externalTrack || tracks[current] || null; }
+  function getCurrentTrack() { return tracks[current] || null; }
 
   function updateMediaSession() {
     if (!('mediaSession' in navigator)) return;
@@ -77,8 +75,7 @@
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.name,
         artist: track.artist || 'Unknown artist',
-        album: track.album || (externalTrack ? 'Navidrome' : 'Wave Music Library'),
-        artwork: track.coverUrl ? [{ src: track.coverUrl, sizes: '256x256', type: 'image/jpeg' }] : []
+        album: 'Wave Music Library'
       });
     }
     navigator.mediaSession.playbackState = audio.paused ? 'paused' : 'playing';
@@ -97,11 +94,6 @@
     const track = getCurrentTrack();
     $('song').textContent = track ? track.name : 'No track selected';
     $('artist').textContent = track ? [track.artist || 'Unknown artist', track.album].filter(Boolean).join(' · ') : 'Choose a track to start listening';
-    if ($('playerCover')) {
-      $('playerCover').hidden = !(track && track.coverUrl);
-      $('playerCover').src = track && track.coverUrl ? track.coverUrl : '';
-      $('playerGlyph').hidden = !!(track && track.coverUrl);
-    }
     $('play').innerHTML = icon(audio.paused ? 'play' : 'pause', 17);
     $('play').setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
     updateMediaSession();
@@ -111,8 +103,8 @@
     const mediaActions = {
       play: () => audio.play().catch(() => {}),
       pause: () => audio.pause(),
-      previoustrack: () => { if (externalTrack && window.WaveNavidrome) window.WaveNavidrome.previous(); else if (tracks.length) selectTrack((current - 1 + tracks.length) % tracks.length); },
-      nexttrack: () => { if (externalTrack && window.WaveNavidrome) window.WaveNavidrome.next(); else if (tracks.length) selectTrack((current + 1) % tracks.length); },
+      previoustrack: () => { if (tracks.length) selectTrack((current - 1 + tracks.length) % tracks.length); },
+      nexttrack: () => { if (tracks.length) selectTrack((current + 1) % tracks.length); },
       seekbackward: details => { audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset || 10)); },
       seekforward: details => { audio.currentTime = Math.min(audio.duration || Infinity, audio.currentTime + (details.seekOffset || 10)); },
       seekto: details => { if (Number.isFinite(details.seekTime)) audio.currentTime = details.seekTime; }
@@ -129,19 +121,15 @@
       .filter(track => (view !== 'fav' || track.favorite) &&
         (track.name + ' ' + (track.artist || '')).toLowerCase().includes(query));
 
-    const inServer = page === 'navidrome';
-    $('tracks').hidden = inServer;
-    $('navidromeView').hidden = !inServer;
-    $('heading').textContent = inServer ? 'Navidrome' : (view === 'fav' ? 'Favorites' : 'Your Library');
-    $('eyebrow').textContent = inServer ? 'PERSONAL MUSIC SERVER' : 'YOUR COLLECTION';
-    $('pageSubtitle').textContent = inServer ? 'Browse and stream from your own music server.' : 'Your music, organized in one place.';
-    $('search').placeholder = inServer ? 'Search your Navidrome library' : 'Search tracks or artists';
+    $('tracks').hidden = false;
+    $('heading').textContent = view === 'fav' ? 'Favorites' : 'Your Library';
+    $('eyebrow').textContent = 'YOUR COLLECTION';
+    $('pageSubtitle').textContent = 'Your music, organized in one place.';
+    $('search').placeholder = 'Search tracks or artists';
     $('libraryTab').classList.toggle('active', !inServer && view === 'all');
     $('favTab').classList.toggle('active', !inServer && view === 'fav');
-    $('serverTab').classList.toggle('active', inServer);
     $('libraryTab').setAttribute('aria-pressed', String(!inServer && view === 'all'));
     $('favTab').setAttribute('aria-pressed', String(!inServer && view === 'fav'));
-    $('serverTab').setAttribute('aria-pressed', String(inServer));
 
     if (list.length) {
       $('tracks').innerHTML = list.map(track =>
@@ -177,7 +165,6 @@
 
   function selectTrack(index) {
     if (index < 0 || index >= tracks.length) return;
-    externalTrack = null;
     current = index;
     audio.src = tracks[index].url;
     audio.load();
@@ -267,16 +254,12 @@
     event.target.value = '';
   };
 
-  $('libraryTab').onclick = () => { page = 'library'; view = 'all'; render(); };
-  $('favTab').onclick = () => { page = 'library'; view = 'fav'; render(); };
-  $('serverTab').onclick = () => { page = 'navidrome'; render(); };
+  $('libraryTab').onclick = () => { view = 'all'; render(); };
+  $('favTab').onclick = () => { view = 'fav'; render(); };
   $('search').oninput = render;
 
   $('play').onclick = () => {
-    if (externalTrack) {
-      if (audio.paused) audio.play().catch(() => notify('Playback could not be started.'));
-      else audio.pause();
-    } else if (current < 0) {
+    if (current < 0) {
       if (tracks.length) selectTrack(0);
       else notify('Add music to your library first.');
     } else if (audio.paused) {
@@ -286,21 +269,12 @@
     }
   };
 
-  $('prev').onclick = () => {
-    if (externalTrack && window.WaveNavidrome) window.WaveNavidrome.previous();
-    else if (tracks.length) selectTrack((current - 1 + tracks.length) % tracks.length);
-  };
-  $('next').onclick = () => {
-    if (externalTrack && window.WaveNavidrome) window.WaveNavidrome.next();
-    else if (tracks.length) selectTrack((current + 1) % tracks.length);
-  };
+  $('prev').onclick = () => { if (tracks.length) selectTrack((current - 1 + tracks.length) % tracks.length); };
+  $('next').onclick = () => { if (tracks.length) selectTrack((current + 1) % tracks.length); };
 
   audio.onplay = () => { updatePlayer(); render(); };
   audio.onpause = () => { updatePlayer(); render(); };
-  audio.onended = () => {
-    if (externalTrack && window.WaveNavidrome) window.WaveNavidrome.next();
-    else if (tracks.length) selectTrack((current + 1) % tracks.length);
-  };
+  audio.onended = () => { if (tracks.length) selectTrack((current + 1) % tracks.length); };
   audio.ontimeupdate = () => {
     $('elapsed').textContent = formatTime(audio.currentTime);
     $('duration').textContent = formatTime(audio.duration);
@@ -313,34 +287,6 @@
   };
   $('volume').oninput = event => { audio.volume = Number(event.target.value); };
   audio.volume = 0.8;
-
-  window.WavePlayer = {
-    setPage(nextPage) { page = nextPage === 'navidrome' ? 'navidrome' : 'library'; render(); },
-    playRemote(track, streamUrl) {
-      externalTrack = {
-        name: track.name || 'Untitled track',
-        artist: track.artist || 'Unknown artist',
-        album: track.album || 'Navidrome',
-        coverUrl: track.coverUrl || ''
-      };
-      current = -1;
-      audio.src = streamUrl;
-      audio.load();
-      render();
-      audio.play().catch(() => notify('Playback could not be started. Check the server connection.'));
-    },
-    isRemoteTrack() { return !!externalTrack; },
-    clearRemote() {
-      if (!externalTrack) return;
-      externalTrack = null;
-      current = -1;
-      audio.pause();
-      audio.removeAttribute('src');
-      audio.load();
-      render();
-    },
-    getAudio() { return audio; }
-  };
 
   const blobToBase64 = blob => new Promise((resolve, reject) => {
     const reader = new FileReader();
